@@ -5,34 +5,34 @@ local term      = require("term")
 
 local gpu       = component.gpu
 local screen    = component.screen
-local laser     = component.laser_verst_rker
+local laser     = component.laser_amplifier
 local redstone  = component.redstone
-local reactor   = component.reaktor_logikadapter -- kann nil sein
+local reactor   = component.reaktor_logicadapter -- can be nil
 
 if not (gpu and screen and laser and redstone) then
-    io.stderr:write("Benötigte Komponenten fehlen\n")
+    io.stderr:write("Required components missing\n")
     return
 end
 
 local running         = true
 
--- RedLogic Bundled-Seite
+-- RedLogic bundled side
 local rsSide          = 5
-local fireColor       = 4 -- Zündung
-local chargeColor     = 1 -- Laser laden
-local fuelColor       = 10 -- Treibstoffzufuhr
-local cavityColor     = 12 -- Hohlraumversorgung
+local fireColor       = 4  -- ignition
+local chargeColor     = 1  -- charging laser
+local fuelColor       = 10 -- fuel injection
+local cavityColor     = 12 -- cavity supply
 
--- GUI-Farben
+-- GUI colors
 local COLOR_ACTIVE    = 0x00CC00
 local COLOR_INACTIVE  = 0x333333
 local COLOR_WARN      = 0xCC0000
 local COLOR_READY     = 0x00CCCC
 local COLOR_BG        = 0x000000
-local COLOR_GRAPH_PWR = 0x00A0FF -- Leistung
-local COLOR_GRAPH_HT  = 0xFF8000 -- Wärme
+local COLOR_GRAPH_PWR = 0x00A0FF -- output power
+local COLOR_GRAPH_HT  = 0xFF8000 -- heat
 
--- 1 MEU = 10.000.000 Einheiten
+-- 1 MEU = 10,000,000 energy units
 local EU_PER_MEU      = 10000000
 local requiredMEU     = 125
 local requiredEU      = requiredMEU * EU_PER_MEU
@@ -229,7 +229,7 @@ local function draw()
 
     gpu.setBackground(COLOR_BG)
     gpu.fill(1, 1, w, 2, " ")
-    gpu.set(2, 1, "edrafts Reaktorsteuerung")
+    gpu.set(2, 1, "edrafts Reactor Control")
     gpu.set(2, 2, string.rep("─", w - 4))
 
     local exitLabel = "[ X ]"
@@ -244,11 +244,11 @@ local function draw()
     if ready and charging then
         charging = false
         updateOutputs()
-        msg("Laser geladen – Laden AUS.")
+        msg("Laser charged – charging OFF.")
     end
 
     gpu.fill(1, 4, w, 1, " ")
-    gpu.set(2, 4, string.format("Laserenergie: %.2f MEU / %d MEU", emeu, requiredMEU))
+    gpu.set(2, 4, string.format("Laser energy: %.2f MEU / %d MEU", emeu, requiredMEU))
 
     local barX, barY = 2, 6
     local barW = w - 4
@@ -284,11 +284,11 @@ local function draw()
     local rowY        = barY + barH + 2
     local gap         = 2
 
-    -- Zündung links
+    -- ignition (left side)
     local zX1, zY1    = 2, rowY
     local zX2, zY2    = zX1 + btnW - 1, zY1 + btnH - 1
 
-    -- Drei Buttons rechts nebeneinander
+    -- three buttons (right side)
     local totalRightW = 3 * btnW + 2 * gap
     local rightX2     = w - 2
     local rightX1     = rightX2 - totalRightW + 1
@@ -305,29 +305,29 @@ local function draw()
     addButton("ignite", zX1, zY1, zX2, zY2, function()
         local _, ok = getLaserEnergy()
         if not ok then
-            msg("Nicht genug Energie.")
+            msg("Not enough energy.")
             return
         end
         pulseFire()
-        msg("Zündung ausgelöst.")
+        msg("Ignition triggered.")
     end)
 
     addButton("charge", cX1, cY1, cX2, cY2, function()
         charging = not charging
         updateOutputs()
-        msg("Laden: " .. (charging and "AN" or "AUS"))
+        msg("Charging: " .. (charging and "ON" or "OFF"))
     end)
 
     addButton("fuel", fX1, fY1, fX2, fY2, function()
         fuelOpen = not fuelOpen
         updateOutputs()
-        msg("Treibstoff: " .. (fuelOpen and "AN" or "AUS"))
+        msg("Fuel: " .. (fuelOpen and "ON" or "OFF"))
     end)
 
     addButton("cavity", hX1, hY1, hX2, hY2, function()
         cavityOpen = not cavityOpen
         updateOutputs()
-        msg("Hohlraum: " .. (cavityOpen and "AN" or "AUS"))
+        msg("Cavity: " .. (cavityOpen and "ON" or "OFF"))
     end)
 
     buttons.ignite.disabled = not ready
@@ -347,12 +347,12 @@ local function draw()
         cavityOpen and 0x000000 or 0xFFFFFF,
         cavityOpen and COLOR_ACTIVE or COLOR_INACTIVE
 
-    buttonDraw(buttons.ignite, "Zündung", ignFg, ignBg)
-    buttonDraw(buttons.charge, "Laden", chargeFg, chargeBg)
-    buttonDraw(buttons.fuel, "Treibstoff", fuelFg, fuelBg)
-    buttonDraw(buttons.cavity, "Hohlraum", cavFg, cavBg)
+    buttonDraw(buttons.ignite, "Ignite", ignFg, ignBg)
+    buttonDraw(buttons.charge, "Charge", chargeFg, chargeBg)
+    buttonDraw(buttons.fuel, "Fuel", fuelFg, fuelBg)
+    buttonDraw(buttons.cavity, "Cavity", cavFg, cavBg)
 
-    -- Reaktor-Graphen (übereinander)
+    -- reactor graphs (stacked vertically)
     local graphsTop    = rowY + btnH + 2
     local graphsBottom = h - 1
     if graphsBottom <= graphsTop then graphsBottom = graphsTop + 2 end
@@ -365,11 +365,11 @@ local function draw()
         pushHistory(plasmaHistory, plasma)
 
         local energyMEU   = prod / EU_PER_MEU
-        local plasmaGK    = plasma / 1000000000 -- 1e9 = GK
+        local plasmaGK    = plasma / 1000000000 -- 1e9 = gigakelvin
 
-        local energyLabel = "Leistung"
+        local energyLabel = "Output Power"
         local energyVal   = string.format("%.2f MEU", energyMEU)
-        local plasmaLabel = "Plasmawärme"
+        local plasmaLabel = "Plasma Heat"
         local plasmaVal   = string.format("%.2f GK", plasmaGK)
 
         drawGraph(2, graphsTop, w - 1, midY,
@@ -378,7 +378,7 @@ local function draw()
             plasmaHistory, plasmaLabel, COLOR_GRAPH_HT, plasmaVal)
     else
         gpu.fill(1, graphsTop, w, graphsBottom - graphsTop + 1, " ")
-        gpu.set(2, graphsTop, "Kein Reaktor-Adapter gefunden")
+        gpu.set(2, graphsTop, "No reactor adapter detected")
     end
 
     gpu.setBackground(COLOR_BG)

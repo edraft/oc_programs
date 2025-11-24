@@ -17,7 +17,7 @@ end
 local running         = true
 
 -- RedLogic bundled side
-local rsSide          = 2
+local rsSide          = 5
 local fireColor       = 4
 local chargeColor     = 1
 local fuelColor       = 10

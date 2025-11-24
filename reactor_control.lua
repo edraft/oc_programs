@@ -3,39 +3,98 @@ local event     = require("event")
 local computer  = require("computer")
 local term      = require("term")
 
-local gpu       = component.gpu
-local screen    = component.screen
-local laser     = component.laser_amplifier
-local redstone  = component.redstone
-local reactor   = component.reactor_logic_adapter -- can be nil
+--------------------------------------------------------------------
+-- Configuration loading
+--------------------------------------------------------------------
+local function loadConfig()
+    -- Default configuration (used if config file is missing or incomplete)
+    local defaults = {
+        -- RedLogic bundled side + colors
+        rsSide          = 5,
+        fireColor       = 4,  -- ignition
+        chargeColor     = 1,  -- charging laser
+        fuelColor       = 10, -- fuel injection
+        cavityColor     = 12, -- cavity supply
+
+        -- GUI colors
+        COLOR_ACTIVE    = 0x00CC00,
+        COLOR_INACTIVE  = 0x333333,
+        COLOR_WARN      = 0xCC0000,
+        COLOR_READY     = 0x00CCCC,
+        COLOR_BG        = 0x000000,
+        COLOR_GRAPH_PWR = 0x00A0FF, -- output power
+        COLOR_GRAPH_HT  = 0xFF8000, -- heat
+
+        -- Energy settings
+        EU_PER_MEU      = 10000000, -- 1 MEU = 10,000,000 energy units
+        requiredMEU     = 125,      -- target MEU for ignition
+
+        -- History / graph settings
+        MAX_HISTORY     = 400
+    }
+
+    -- Path to the config file; change if you prefer another location/name
+    local configPath = "/etc/reactor_control.cfg"
+
+    local ok, cfg = pcall(dofile, configPath)
+    if not ok or type(cfg) ~= "table" then
+        -- Use defaults if config not found or invalid
+        return defaults
+    end
+
+    -- Fill in missing values with defaults
+    for k, v in pairs(defaults) do
+        if cfg[k] == nil then
+            cfg[k] = v
+        end
+    end
+
+    return cfg
+end
+
+local config          = loadConfig()
+
+--------------------------------------------------------------------
+-- Local references to settings
+--------------------------------------------------------------------
+local rsSide          = config.rsSide
+local fireColor       = config.fireColor
+local chargeColor     = config.chargeColor
+local fuelColor       = config.fuelColor
+local cavityColor     = config.cavityColor
+
+local COLOR_ACTIVE    = config.COLOR_ACTIVE
+local COLOR_INACTIVE  = config.COLOR_INACTIVE
+local COLOR_WARN      = config.COLOR_WARN
+local COLOR_READY     = config.COLOR_READY
+local COLOR_BG        = config.COLOR_BG
+local COLOR_GRAPH_PWR = config.COLOR_GRAPH_PWR
+local COLOR_GRAPH_HT  = config.COLOR_GRAPH_HT
+
+local EU_PER_MEU      = config.EU_PER_MEU
+local requiredMEU     = config.requiredMEU
+local requiredEU      = requiredMEU * EU_PER_MEU
+
+local MAX_HISTORY     = config.MAX_HISTORY
+
+--------------------------------------------------------------------
+-- Components
+--------------------------------------------------------------------
+local gpu             = component.gpu
+local screen          = component.screen
+local laser           = component.laser_amplifier
+local redstone        = component.redstone
+local reactor         = component.reaktor_logicadapter -- can be nil
 
 if not (gpu and screen and laser and redstone) then
     io.stderr:write("Required components missing\n")
     return
 end
 
+--------------------------------------------------------------------
+-- State
+--------------------------------------------------------------------
 local running         = true
-
--- RedLogic bundled side
-local rsSide          = 5
-local fireColor       = 4  -- ignition
-local chargeColor     = 1  -- charging laser
-local fuelColor       = 10 -- fuel injection
-local cavityColor     = 12 -- cavity supply
-
--- GUI colors
-local COLOR_ACTIVE    = 0x00CC00
-local COLOR_INACTIVE  = 0x333333
-local COLOR_WARN      = 0xCC0000
-local COLOR_READY     = 0x00CCCC
-local COLOR_BG        = 0x000000
-local COLOR_GRAPH_PWR = 0x00A0FF -- output power
-local COLOR_GRAPH_HT  = 0xFF8000 -- heat
-
--- 1 MEU = 10,000,000 energy units
-local EU_PER_MEU      = 10000000
-local requiredMEU     = 125
-local requiredEU      = requiredMEU * EU_PER_MEU
 
 local charging        = false
 local fuelOpen        = false
@@ -46,10 +105,12 @@ local lastMessageTime = 0
 local firstDraw       = true
 local buttons         = {}
 
-local MAX_HISTORY     = 400
 local plasmaHistory   = {}
 local energyHistory   = {}
 
+--------------------------------------------------------------------
+-- Helper functions
+--------------------------------------------------------------------
 local function msg(m)
     lastMessage = m or ""
     lastMessageTime = computer.uptime()
@@ -218,6 +279,9 @@ local function drawGraph(x1, y1, x2, y2, history, label, color, valueText)
     gpu.setBackground(oldBg)
 end
 
+--------------------------------------------------------------------
+-- Drawing / UI
+--------------------------------------------------------------------
 local function draw()
     local w, h = gpu.getResolution()
     if firstDraw then
@@ -388,6 +452,9 @@ local function draw()
     end
 end
 
+--------------------------------------------------------------------
+-- Event handling
+--------------------------------------------------------------------
 local function handleTouch(_, _, x, y)
     for _, b in pairs(buttons) do
         if inside(b, x, y) then
@@ -398,6 +465,9 @@ local function handleTouch(_, _, x, y)
     end
 end
 
+--------------------------------------------------------------------
+-- Main
+--------------------------------------------------------------------
 local function main()
     term.clear()
     updateOutputs()

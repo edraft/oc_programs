@@ -5,9 +5,9 @@ local term      = require("term")
 
 local gpu       = component.gpu
 local screen    = component.screen
-local laser     = component.laser_verst_rker     -- component.laser_amplifier
+local laser     = component.laser_amplifier
 local redstone  = component.redstone
-local reactor   = component.reaktor_logikadapter -- component.reactor_logic_adapter -- can be nil
+local reactor   = component.reactor_logic_adapter -- can be nil
 
 if not (gpu and screen and laser and redstone) then
     io.stderr:write("Required components missing\n")
